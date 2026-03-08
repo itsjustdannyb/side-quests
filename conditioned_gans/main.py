@@ -10,9 +10,9 @@ from torch.utils.data import DataLoader
 import torchvision.transforms.v2 as T
 
 import argparse
-import matplotlib.pyplot as plt
 
-from models import Generator, Discriminator
+from models import CondGenerator as Generator 
+from models import CondDiscriminator as Discriminator
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"running on {device}")
@@ -40,7 +40,7 @@ def train_gan(epochs, lr, batch_size, latent_dim):
     val_dataset = MNIST(root="data/val", train=False, transform=transforms, download=True)
 
     train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-    val_dataloader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
+    # val_dataloader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 
 
     generator = Generator(latnet_dim=latent_dim).to(device)
@@ -53,8 +53,9 @@ def train_gan(epochs, lr, batch_size, latent_dim):
 
     for epoch in range(epochs):
         total_gen_loss, total_disc_loss = 0, 0
-        for images, _ in train_dataloader:
+        for images, labels in train_dataloader:
             images = images.to(device)
+            labels = labels.to(device)
             current_batch_size = images.shape[0]
 
             generator.train(); discriminator.train()
@@ -62,10 +63,12 @@ def train_gan(epochs, lr, batch_size, latent_dim):
 
             ## train discriminator
             z = torch.randn(current_batch_size, latent_dim, device=device)
-            fake_images = generator(z)
 
-            disc_real_preds = discriminator(images)
-            disc_fake_preds = discriminator(fake_images.detach()) # detach so we don't backprop into generator during disc step
+            fake_labels = torch.randint(0, 10, (current_batch_size,), device=device)
+            fake_images = generator(z, fake_labels)
+
+            disc_real_preds = discriminator(images, labels)
+            disc_fake_preds = discriminator(fake_images.detach(), fake_labels) # detach so we don't backprop into generator during disc step
 
             disc_real_loss = criterion(disc_real_preds.squeeze(dim=1), torch.ones(current_batch_size, device=device))
             disc_fake_loss = criterion(disc_fake_preds.squeeze(dim=1), torch.zeros(current_batch_size, device=device))
@@ -78,7 +81,7 @@ def train_gan(epochs, lr, batch_size, latent_dim):
 
             ## train generator    
 
-            fake_images_preds = discriminator(fake_images)
+            fake_images_preds = discriminator(fake_images, fake_labels)
             loss_gen = criterion(fake_images_preds.squeeze(dim=1), torch.ones(current_batch_size, device=device)) # compute loss so gen knows if its generating well or not; the generetor never sees what a real image looks like
 
             generator_optimizer.zero_grad()
