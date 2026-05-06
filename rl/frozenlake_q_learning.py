@@ -78,3 +78,6 @@ if __name__ == "__main__":
             break    
     
     writer.close()
+
+
+#tensorboard --logdir runs
